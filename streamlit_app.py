@@ -3,103 +3,121 @@ import requests
 import pandas as pd
 import time
 
-st.set_page_config(page_title="Multi-Coin Live Pro Dashboard", layout="wide")
+st.set_page_config(page_title="All Crypto Spot & Futures Dashboard", layout="wide")
 
-st.title("🚀 ALL-IN-ONE CRYPTO LIVE PRO DASHBOARD")
+st.title("🚀 ALL CRYPTO SPOT & FUTURES LIVE DASHBOARD")
 st.caption("👨‍💻 Developer: Bilal Ali (Shebi)")
 
-# Dynamic Multi-Coin Watchlist
-WATCHLIST = [
-    {"symbol": "BTC", "id": "bitcoin"},
-    {"symbol": "ETH", "id": "ethereum"},
-    {"symbol": "PAXG", "id": "pax-gold"},
-    {"symbol": "ZEC", "id": "zcash"},
-    {"symbol": "SOL", "id": "solana"},
-    {"symbol": "BNB", "id": "binancecoin"},
-    {"symbol": "XRP", "id": "ripple"},
-    {"symbol": "ADA", "id": "cardano"}
-]
+# Market Type Selector
+market_type = st.sidebar.radio("📍 Select Market Type", ["SPOT Market 🛒", "FUTURES Market ⚡"])
 
-def fetch_coin_data(coin_id):
+# Fetch All Trading Pairs from Binance
+@st.cache_data(ttl=60)
+def get_all_symbols(is_futures=False):
     try:
-        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false"
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json().get("market_data", {})
-            price = data.get("current_price", {}).get("usd", 0)
-            change_24h = data.get("price_change_percentage_24h", 0)
-            high_24h = data.get("high_24h", {}).get("usd", price)
-            low_24h = data.get("low_24h", {}).get("usd", price)
-            vol = data.get("total_volume", {}).get("usd", 0)
-            return price, change_24h, high_24h, low_24h, vol
-    except Exception:
-        pass
-    return None, None, None, None, None
-
-st.subheader("📊 Live Market Multi-Coin Overview")
-
-# Loop through all coins
-for item in WATCHLIST:
-    symbol = item["symbol"]
-    c_id = item["id"]
-    
-    price, change, high, low, vol = fetch_coin_data(c_id)
-    
-    if price and price > 0:
-        # Technical Predictions & Dynamic Indicator Logic
-        tp_pred = price * 1.025
-        sl_pred = price * 0.985
-        
-        # Dynamic RSI Estimate based on market momentum
-        rsi_val = max(15, min(85, 50 + (change * 1.8)))
-        
-        if rsi_val < 35:
-            rsi_text = f"RSI: {rsi_val:.1f} (OVERSOLD 🟢 BUY)"
-            rsi_badge = "🟢 BULLISH"
-        elif rsi_val > 65:
-            rsi_text = f"RSI: {rsi_val:.1f} (OVERBOUGHT 🔴 SELL)"
-            rsi_badge = "🔴 BEARISH"
+        if is_futures:
+            url = "https://fapi.binance.com/fapi/v1/exchangeInfo"
         else:
-            rsi_text = f"RSI: {rsi_val:.1f} (NEUTRAL 🟡 HOLD)"
-            rsi_badge = "🟡 NEUTRAL"
-
-        # Signal Determination
-        if change > 1.5:
-            signal = "🟢 HIGH CONFIRMATION BUY"
-        elif change < -1.5:
-            signal = "🔴 HIGH CONFIRMATION SELL"
-        else:
-            signal = "🟡 WAIT / NO TRADE"
-
-        # MAIN CARD FOR EACH COIN
-        with st.expander(f"📌 **{symbol}/USDT** — ${price:,.4f} | 24h: {change:+.2f}% | Signal: {signal}", expanded=True):
+            url = "https://api.binance.com/api/v3/exchangeInfo"
             
-            # Row 1: Prediction Cards (Yellow, Green, Red)
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.warning(f"🟡 **SAFE ENTRY**\n\n### ${price:,.4f}")
-            with c2:
-                st.success(f"🟢 **TAKE PROFIT (TP)**\n\n### ${tp_pred:,.4f}")
-            with c3:
-                st.error(f"🔴 **STOP LOSS (SL)**\n\n### ${sl_pred:,.4f}")
+        res = requests.get(url, timeout=5).json()
+        symbols = [s['symbol'] for s in res['symbols'] if s['symbol'].endswith('USDT') and s['status'] == 'TRADING']
+        return sorted(symbols)
+    except:
+        return ["BTCUSDT", "ETHUSDT", "PAXGUSDT", "SOLUSDT", "BNBUSDT", "ZECUSDT"]
 
-            # Row 2: Live Indicators Breakdown
-            i1, i2, i3, i4 = st.columns(4)
-            with i1:
-                st.info(f"**Indicator**: {rsi_text}")
-            with i2:
-                st.info(f"**24h High (Resistance)**: ${high:,.2f}")
-            with i3:
-                st.info(f"**24h Low (Support)**: ${low:,.2f}")
-            with i4:
-                st.info(f"**Market Status**: {rsi_badge}")
+is_fut = "FUTURES" in market_type
+all_coins = get_all_symbols(is_futures=is_fut)
 
-            st.caption(f"Volume (24h): ${vol:,.0f}")
-            st.divider()
+# Sidebar Coin Search/Select
+selected_coin = st.sidebar.selectbox("🔍 Search Any Coin (Spot / Future)", all_coins, index=0)
 
+# Fetch Live Data for Selected Coin
+def get_ticker_and_klines(symbol, is_futures=False):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    base_url = "https://fapi.binance.com" if is_futures else "https://api.binance.com"
+    
+    try:
+        # Live Price & 24h Change
+        ticker_url = f"{base_url}/api/v3/ticker/24hr?symbol={symbol}" if not is_futures else f"{base_url}/fapi/v1/ticker/24hr?symbol={symbol}"
+        ticker_res = requests.get(ticker_url, headers=headers, timeout=5).json()
+        
+        # Kline / Candlestick Data for RSI calculation
+        kline_url = f"{base_url}/api/v3/klines?symbol={symbol}&interval=1h&limit=50" if not is_futures else f"{base_url}/fapi/v1/klines?symbol={symbol}&interval=1h&limit=50"
+        kline_res = requests.get(kline_url, headers=headers, timeout=5).json()
+        
+        df = pd.DataFrame(kline_res, columns=['time', 'open', 'high', 'low', 'close', 'vol', 'close_time', 'qav', 'trades', 'tb_base', 'tb_quote', 'ignore'])
+        df['close'] = df['close'].astype(float)
+        
+        return float(ticker_res['lastPrice']), float(ticker_res['priceChangePercent']), float(ticker_res['highPrice']), float(ticker_res['lowPrice']), float(ticker_res['volume']), df
+    except:
+        return None, None, None, None, None, None
+
+price, change, high, low, vol, df = get_ticker_and_klines(selected_coin, is_futures=is_fut)
+
+if price:
+    # Calculations
+    tp_pred = price * 1.025
+    sl_pred = price * 0.985
+    
+    # RSI Calculation
+    if df is not None and not df.empty:
+        delta = df['close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = (100 - (100 / (1 + rs))).iloc[-1]
     else:
-        st.warning(f"⏳ {symbol} Ka Live Data Connect Ho Raha Hai...")
+        rsi = 50.0
 
-# Live Auto-Refresh every 5 seconds
+    st.markdown(f"## 📌 Selected Pair: `{selected_coin}` ({market_type})")
+    st.markdown(f"### Current Live Price: **${price:,.4f}** | 24h Change: **{change:+.2f}%**")
+
+    # PREDICTION CARDS
+    st.markdown("### 🎯 Live Predictions & Order Levels")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.warning(f"🟡 SAFE ENTRY RATE\n\n### ${price:,.4f}")
+    with col2:
+        st.success(f"🟢 TAKE PROFIT (TP)\n\n### ${tp_pred:,.4f}")
+    with col3:
+        st.error(f"🔴 STOP LOSS (SL)\n\n### ${sl_pred:,.4f}")
+
+    st.divider()
+
+    # TECHNICAL INDICATORS
+    st.markdown("### 📊 Live Technical Indicators")
+    i1, i2, i3, i4 = st.columns(4)
+    
+    with i1:
+        st.info(f"**Live RSI (14)**: {rsi:.2f}")
+    with i2:
+        st.info(f"**24h Resistance (High)**: ${high:,.4f}")
+    with i3:
+        st.info(f"**24h Support (Low)**: ${low:,.4f}")
+    with i4:
+        trend = "🟢 STRONG BULLISH" if change > 2 and rsi > 55 else "🔴 BEARISH / DUMP" if change < -2 and rsi < 45 else "🟡 SIDEWAYS / HOLD"
+        st.info(f"**Signal Status**: {trend}")
+
+    # Leverage Calculator for Futures
+    if is_fut:
+        st.divider()
+        st.markdown("### ⚡ Futures Leverage & Profit Calculator")
+        lev = st.slider("Select Leverage (x)", min_value=1, max_value=75, value=10)
+        margin = st.number_input("Margin / Investment ($)", min_value=10.0, value=100.0)
+        
+        pos_size = margin * lev
+        estimated_profit = (tp_pred - price) * (pos_size / price)
+        estimated_loss = (price - sl_pred) * (pos_size / price)
+        
+        st.write(f"💼 **Total Position Size**: `${pos_size:,.2f}`")
+        st.write(f"🟢 **Estimated Profit at TP**: `+${estimated_profit:.2f}`")
+        st.write(f"🔴 **Estimated Loss at SL**: `-${estimated_loss:.2f}`")
+
+else:
+    st.warning("⏳ Live Data Connect Ho Raha Hai... Re-checking Connection.")
+
+# Auto Refresh Every 5 Seconds
 time.sleep(5)
 st.rerun()
