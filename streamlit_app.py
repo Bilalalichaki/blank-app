@@ -1,18 +1,14 @@
 import streamlit as st
 import requests
 import pandas as pd
-from streamlit_autorefresh import st_autorefresh
+import time
 
-# Page Config
 st.set_page_config(page_title="Crypto Live Dashboard", layout="wide")
 
-# Har 5 Second Me Auto Refresh
-st_autorefresh(interval=5000, key="datarefresh")
-
-st.title("🚀 CRYPTO & GOLD LIVE PRO DASHBOARD")
+st.title("🚀 CRYPTO LIVE PRO DASHBOARD")
 st.caption("👨‍💻 Developer: Bilal Ali (Shebi)")
 
-# Top Bar Symbol Selection / Multi Watchlist
+# Coin Selector Sidebar
 coin = st.sidebar.selectbox("Select Coin", ["BTC", "ETH", "PAXG", "ZEC", "SOL", "BNB"], index=0)
 
 def get_binance_klines(symbol: str, interval="1h", limit=100):
@@ -48,7 +44,7 @@ if df_1h is not None and not df_1h.empty:
     tp_pred = live_price * 1.025
     sl_pred = live_price * 0.985
 
-    # LIVE PREDICTION CARDS (COLOR CODED)
+    # LIVE PREDICTION CARDS
     st.markdown("### 🎯 Live Predictions & Signals")
     col1, col2, col3 = st.columns(3)
     
@@ -76,3 +72,7 @@ if df_1h is not None and not df_1h.empty:
 
 else:
     st.error("Live Data Fetch Nahi Ho Saka!")
+
+# Auto-refresh loop (Every 5 seconds)
+time.sleep(5)
+st.rerun()
