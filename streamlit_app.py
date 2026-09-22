@@ -2,30 +2,29 @@ import streamlit as st
 import requests
 import time
 
-st.set_page_config(page_title="Spot & Futures Dashboard", layout="wide")
+st.set_page_config(page_title="Crypto Live Dashboard", layout="wide")
 
 st.title("🚀 ALL CRYPTO SPOT & FUTURES DASHBOARD")
 st.caption("👨‍💻 Developer: Bilal Ali (Shebi)")
 
-# Popular Coins List
-COIN_LIST = {
+# Coins Database
+COINS = {
     "BTC": "bitcoin",
     "ETH": "ethereum",
     "SOL": "solana",
     "BNB": "binance-coin",
     "XRP": "xrp",
     "ADA": "cardano",
-    "AVAX": "avalanche-2",
     "DOGE": "dogecoin",
     "PAXG": "pax-gold",
     "ZEC": "zcash"
 }
 
 market_type = st.sidebar.radio("📍 Select Market Type", ["SPOT Market 🛒", "FUTURES Market ⚡"])
-selected_symbol = st.sidebar.selectbox("🔍 Select Coin", list(COIN_LIST.keys()), index=0)
-coin_id = COIN_LIST[selected_symbol]
+selected_symbol = st.sidebar.selectbox("🔍 Select Coin", list(COINS.keys()), index=0)
+coin_id = COINS[selected_symbol]
 
-def get_coincap_data(c_id):
+def get_crypto_data(c_id):
     try:
         url = f"https://api.coincap.io/v2/assets/{c_id}"
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -35,10 +34,10 @@ def get_coincap_data(c_id):
         change = float(data.get("changePercent24Hr", 0))
         volume = float(data.get("volumeUsd24Hr", 0))
         return price, change, volume
-    except:
+    except Exception:
         return None, None, None
 
-price, change, vol = get_coincap_data(coin_id)
+price, change, vol = get_crypto_data(coin_id)
 
 if price and price > 0:
     tp_pred = price * 1.025
@@ -88,7 +87,7 @@ if price and price > 0:
         st.write(f"🔴 **Estimated Loss at SL**: `-${estimated_loss:.2f}`")
 
 else:
-    st.error("🔄 Connecting to Market Data Feed...")
+    st.info("🔄 Market Feed Connect Ho Raha Hai...")
 
 time.sleep(5)
 st.rerun()
