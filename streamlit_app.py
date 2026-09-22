@@ -6,35 +6,34 @@ st.set_page_config(page_title="Crypto Live Dashboard", layout="wide")
 st.title("🚀 ALL CRYPTO SPOT & FUTURES DASHBOARD")
 st.caption("👨‍💻 Developer: Bilal Ali (Shebi)")
 
-# Coins List
+# Coins Mapping for CoinGecko (100% Reliable)
 COINS = {
     "BTC": "bitcoin",
     "ETH": "ethereum",
     "SOL": "solana",
-    "BNB": "binance-coin",
-    "XRP": "xrp",
+    "BNB": "binancecoin",
+    "XRP": "ripple",
     "ADA": "cardano",
     "DOGE": "dogecoin",
     "PAXG (Gold)": "pax-gold",
     "ZEC": "zcash"
 }
 
-# Sidebar Selectors
 market_type = st.sidebar.radio("📍 Select Market Type", ["SPOT Market 🛒", "FUTURES Market ⚡"])
 selected_symbol = st.sidebar.selectbox("🔍 Select Coin", list(COINS.keys()), index=0)
 coin_id = COINS[selected_symbol]
 
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=10)
 def get_crypto_data(c_id):
     try:
-        url = f"https://api.coincap.io/v2/assets/{c_id}"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        res = requests.get(url, headers=headers, timeout=4)
+        # Ultra fast endpoint
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={c_id}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true"
+        res = requests.get(url, timeout=5)
         if res.status_code == 200:
-            data = res.json().get("data", {})
-            price = float(data.get("priceUsd", 0))
-            change = float(data.get("changePercent24Hr", 0))
-            volume = float(data.get("volumeUsd24Hr", 0))
+            data = res.json().get(c_id, {})
+            price = float(data.get("usd", 0))
+            change = float(data.get("usd_24h_change", 0))
+            volume = float(data.get("usd_24h_vol", 0))
             return price, change, volume
     except Exception:
         pass
@@ -50,7 +49,7 @@ if price and price > 0:
     st.markdown(f"## 📌 `{selected_symbol}` — ({market_type})")
     st.markdown(f"### Live Rate: **${price:,.4f}** | 24h Change: **{change:+.2f}%**")
 
-    # 3 COLOR BOXES
+    # 3 MAIN COLOR BOXES
     st.markdown("### 🎯 Live Predictions & Signal Levels")
     col1, col2, col3 = st.columns(3)
     
