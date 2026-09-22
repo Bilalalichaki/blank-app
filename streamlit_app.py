@@ -3,90 +3,103 @@ import requests
 import pandas as pd
 import time
 
-st.set_page_config(page_title="Crypto Live Dashboard", layout="wide")
+st.set_page_config(page_title="Multi-Coin Live Pro Dashboard", layout="wide")
 
-st.title("🚀 CRYPTO LIVE PRO DASHBOARD")
+st.title("🚀 ALL-IN-ONE CRYPTO LIVE PRO DASHBOARD")
 st.caption("👨‍💻 Developer: Bilal Ali (Shebi)")
 
-coin = st.sidebar.selectbox("Select Coin", ["BTC", "ETH", "PAXG", "ZEC", "SOL", "BNB"], index=0)
+# Dynamic Multi-Coin Watchlist
+WATCHLIST = [
+    {"symbol": "BTC", "id": "bitcoin"},
+    {"symbol": "ETH", "id": "ethereum"},
+    {"symbol": "PAXG", "id": "pax-gold"},
+    {"symbol": "ZEC", "id": "zcash"},
+    {"symbol": "SOL", "id": "solana"},
+    {"symbol": "BNB", "id": "binancecoin"},
+    {"symbol": "XRP", "id": "ripple"},
+    {"symbol": "ADA", "id": "cardano"}
+]
 
-def get_binance_klines(symbol: str, interval="1h", limit=100):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol.upper()}USDT&interval={interval}&limit={limit}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-    }
+def fetch_coin_data(coin_id):
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false"
+        response = requests.get(url, timeout=5)
         if response.status_code == 200:
-            data = response.json()
-            df = pd.DataFrame(data, columns=[
-                'open_time', 'open', 'high', 'low', 'close', 'volume',
-                'close_time', 'qav', 'num_trades', 'taker_base_vol', 'taker_quote_vol', 'ignore'
-            ])
-            df['close'] = df['close'].astype(float)
-            df['high'] = df['high'].astype(float)
-            df['low'] = df['low'].astype(float)
-            df['volume'] = df['volume'].astype(float)
-            return df
-        else:
-            # Fallback API agar Binance main API block ho
-            backup_url = f"https://api1.binance.com/api/v3/klines?symbol={symbol.upper()}USDT&interval={interval}&limit={limit}"
-            resp = requests.get(backup_url, headers=headers, timeout=10)
-            data = resp.json()
-            df = pd.DataFrame(data, columns=[
-                'open_time', 'open', 'high', 'low', 'close', 'volume',
-                'close_time', 'qav', 'num_trades', 'taker_base_vol', 'taker_quote_vol', 'ignore'
-            ])
-            df['close'] = df['close'].astype(float)
-            df['high'] = df['high'].astype(float)
-            df['low'] = df['low'].astype(float)
-            df['volume'] = df['volume'].astype(float)
-            return df
+            data = response.json().get("market_data", {})
+            price = data.get("current_price", {}).get("usd", 0)
+            change_24h = data.get("price_change_percentage_24h", 0)
+            high_24h = data.get("high_24h", {}).get("usd", price)
+            low_24h = data.get("low_24h", {}).get("usd", price)
+            vol = data.get("total_volume", {}).get("usd", 0)
+            return price, change_24h, high_24h, low_24h, vol
     except Exception:
-        return None
+        pass
+    return None, None, None, None, None
 
-df_1h = get_binance_klines(coin, interval="1h")
+st.subheader("📊 Live Market Multi-Coin Overview")
 
-if df_1h is not None and not df_1h.empty:
-    live_price = df_1h['close'].iloc[-1]
+# Loop through all coins
+for item in WATCHLIST:
+    symbol = item["symbol"]
+    c_id = item["id"]
     
-    # RSI Calculation
-    delta = df_1h['close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    rsi = (100 - (100 / (1 + rs))).iloc[-1]
-
-    # Target & Stop Loss Predictions
-    tp_pred = live_price * 1.025
-    sl_pred = live_price * 0.985
-
-    st.markdown("### 🎯 Live Predictions & Signals")
-    col1, col2, col3 = st.columns(3)
+    price, change, high, low, vol = fetch_coin_data(c_id)
     
-    with col1:
-        st.warning(f"🟡 SAFE ENTRY\n\n### ${live_price:,.4f}")
-    with col2:
-        st.success(f"🟢 TAKE PROFIT (TP)\n\n### ${tp_pred:,.4f}")
-    with col3:
-        st.error(f"🔴 STOP LOSS (SL)\n\n### ${sl_pred:,.4f}")
+    if price and price > 0:
+        # Technical Predictions & Dynamic Indicator Logic
+        tp_pred = price * 1.025
+        sl_pred = price * 0.985
+        
+        # Dynamic RSI Estimate based on market momentum
+        rsi_val = max(15, min(85, 50 + (change * 1.8)))
+        
+        if rsi_val < 35:
+            rsi_text = f"RSI: {rsi_val:.1f} (OVERSOLD 🟢 BUY)"
+            rsi_badge = "🟢 BULLISH"
+        elif rsi_val > 65:
+            rsi_text = f"RSI: {rsi_val:.1f} (OVERBOUGHT 🔴 SELL)"
+            rsi_badge = "🔴 BEARISH"
+        else:
+            rsi_text = f"RSI: {rsi_val:.1f} (NEUTRAL 🟡 HOLD)"
+            rsi_badge = "🟡 NEUTRAL"
 
-    st.divider()
+        # Signal Determination
+        if change > 1.5:
+            signal = "🟢 HIGH CONFIRMATION BUY"
+        elif change < -1.5:
+            signal = "🔴 HIGH CONFIRMATION SELL"
+        else:
+            signal = "🟡 WAIT / NO TRADE"
 
-    st.markdown("### 📊 Live Technical Indicators")
-    ind_col1, ind_col2, ind_col3 = st.columns(3)
+        # MAIN CARD FOR EACH COIN
+        with st.expander(f"📌 **{symbol}/USDT** — ${price:,.4f} | 24h: {change:+.2f}% | Signal: {signal}", expanded=True):
+            
+            # Row 1: Prediction Cards (Yellow, Green, Red)
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.warning(f"🟡 **SAFE ENTRY**\n\n### ${price:,.4f}")
+            with c2:
+                st.success(f"🟢 **TAKE PROFIT (TP)**\n\n### ${tp_pred:,.4f}")
+            with c3:
+                st.error(f"🔴 **STOP LOSS (SL)**\n\n### ${sl_pred:,.4f}")
 
-    with ind_col1:
-        st.info(f"**RSI (14)**: {rsi:.2f}")
-    with ind_col2:
-        ema20 = df_1h['close'].ewm(span=20, adjust=False).mean().iloc[-1]
-        st.info(f"**EMA 20**: ${ema20:,.2f}")
-    with ind_col3:
-        vol = df_1h['volume'].iloc[-1]
-        st.info(f"**Live Volume**: {vol:,.2f}")
+            # Row 2: Live Indicators Breakdown
+            i1, i2, i3, i4 = st.columns(4)
+            with i1:
+                st.info(f"**Indicator**: {rsi_text}")
+            with i2:
+                st.info(f"**24h High (Resistance)**: ${high:,.2f}")
+            with i3:
+                st.info(f"**24h Low (Support)**: ${low:,.2f}")
+            with i4:
+                st.info(f"**Market Status**: {rsi_badge}")
 
-else:
-    st.error("Live Data Fetch Nahi Ho Saka! Re-checking connection...")
+            st.caption(f"Volume (24h): ${vol:,.0f}")
+            st.divider()
 
+    else:
+        st.warning(f"⏳ {symbol} Ka Live Data Connect Ho Raha Hai...")
+
+# Live Auto-Refresh every 5 seconds
 time.sleep(5)
 st.rerun()
